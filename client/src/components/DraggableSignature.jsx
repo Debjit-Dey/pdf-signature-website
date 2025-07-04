@@ -1,10 +1,19 @@
+// DraggableSignature.jsx
 import React from "react";
 import { useDrag } from "react-dnd";
 
-const DraggableSignature = ({ text, font }) => {
+const DraggableSignature = ({ id, text, font, x, y, onMove }) => {
   const [{ isDragging }, dragRef] = useDrag({
     type: "SIGNATURE",
-    item: { text, font },
+    item: { id, text, font, x, y },
+    end: (item, monitor) => {
+      const offset = monitor.getDifferenceFromInitialOffset();
+      if (offset && onMove) {
+        const newX = x + offset.x;
+        const newY = y + offset.y;
+        onMove(id, newX, newY);
+      }
+    },
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
     }),
@@ -13,11 +22,16 @@ const DraggableSignature = ({ text, font }) => {
   return (
     <div
       ref={dragRef}
-      className="inline-block px-4 py-2 cursor-move border rounded bg-white shadow"
       style={{
+        position: "absolute",
+        left: x,
+        top: y,
         fontFamily: font,
         fontSize: 20,
+        color: "#000",
+        cursor: "move",
         opacity: isDragging ? 0.5 : 1,
+        zIndex: 10,
       }}
     >
       {text}

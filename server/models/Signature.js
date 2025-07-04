@@ -1,4 +1,3 @@
-// server/models/Signature.js
 const mongoose = require("mongoose");
 
 const signatureSchema = new mongoose.Schema(
@@ -13,26 +12,20 @@ const signatureSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    x: {
-      type: Number,
-      required: true,
-    },
-    y: {
-      type: Number,
-      required: true,
-    },
-    page: {
-      type: Number,
-      required: true,
-    },
+    x: { type: Number, required: true },
+    y: { type: Number, required: true },
+    width: { type: Number },
+    height: { type: Number },
+    page: { type: Number, required: true },
+    text: { type: String },
+    font: { type: String },
+    image: { type: String }, // ✅ base64 or URL of the signature image
     status: {
       type: String,
       enum: ["pending", "signed", "rejected"],
-      default: "pending",
+      default: "signed",
     },
-    reason: {
-      type: String, // for rejection reason (optional)
-    },
+    reason: { type: String },
   },
   { timestamps: true }
 );

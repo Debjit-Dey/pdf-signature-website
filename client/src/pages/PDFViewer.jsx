@@ -6,65 +6,12 @@ import { defaultLayoutPlugin } from "@react-pdf-viewer/default-layout";
 import "@react-pdf-viewer/core/lib/styles/index.css";
 import "@react-pdf-viewer/default-layout/lib/styles/index.css";
 
-import { DndProvider, useDrop } from "react-dnd";
+import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import SignaturePopup from "../components/SignaturePopup";
-import DraggableSignature from "../components/DraggableSignature";
+import DraggableResizableSignature from "../components/DraggableResizableSignature";
 
 const API = import.meta.env.VITE_API_BASE_URL;
-
-const DropZone = ({ pdfUrl, signatures, onDrop, appliedSign }) => {
-  const [{ isOver }, dropRef] = useDrop({
-    accept: "SIGNATURE",
-    drop: (item, monitor) => {
-      const offset = monitor.getClientOffset();
-      const dropTarget = document.getElementById("pdf-container");
-      const rect = dropTarget.getBoundingClientRect();
-      const x = offset.x - rect.left;
-      const y = offset.y - rect.top;
-
-      onDrop({
-        text: item.text,
-        font: item.font,
-        x,
-        y,
-        page: 1, // future enhancement: map to page
-      });
-    },
-    collect: (monitor) => ({
-      isOver: !!monitor.isOver(),
-    }),
-  });
-
-  return (
-    <div
-      id="pdf-container"
-      ref={dropRef}
-      className="relative border shadow rounded bg-white h-[85vh] overflow-auto"
-    >
-      <Worker workerUrl="https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.worker.min.js">
-        <Viewer fileUrl={pdfUrl} plugins={[defaultLayoutPlugin()]} />
-      </Worker>
-
-      {signatures.map((sig, idx) => (
-        <div
-          key={idx}
-          className="absolute pointer-events-none"
-          style={{
-            top: sig.y,
-            left: sig.x,
-            fontFamily: sig.font,
-            fontSize: 20,
-            color: "#000",
-            zIndex: 20,
-          }}
-        >
-          {sig.text}
-        </div>
-      ))}
-    </div>
-  );
-};
 
 const PDFViewer = () => {
   const { id } = useParams();
@@ -72,7 +19,25 @@ const PDFViewer = () => {
   const [signatures, setSignatures] = useState([]);
   const [showPopup, setShowPopup] = useState(false);
   const [appliedSign, setAppliedSign] = useState(null);
-  const [error, setError] = useState(null);
+  const defaultLayoutPluginInstance = defaultLayoutPlugin();
+  const [pdfDimensions, setPdfDimensions] = useState({ width: 1, height: 1 });
+
+  useEffect(() => {
+    const handleResize = () => {
+      const pdfEl = document.querySelector(".rpv-core__viewer"); // class inside @react-pdf-viewer
+      if (pdfEl) {
+        setPdfDimensions({
+          width: pdfEl.offsetWidth,
+          height: pdfEl.offsetHeight,
+        });
+      }
+    };
+
+    // Run once and on window resize
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const fetchPdf = async () => {
     try {
@@ -81,27 +46,63 @@ const PDFViewer = () => {
         headers: { Authorization: `Bearer ${token}` },
         responseType: "blob",
       });
-
       const blob = new Blob([res.data], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      setPdfUrl(url);
+      setPdfUrl(URL.createObjectURL(blob));
     } catch (err) {
-      console.error("Error fetching PDF:", err);
-      setError("Could not load the PDF file.");
+      console.error("Failed to load PDF", err);
     }
   };
 
-  const handleDrop = async ({ text, font, x, y, page }) => {
-    setSignatures((prev) => [...prev, { text, font, x, y, page }]);
+  const fetchSignatures = async () => {
     try {
       const token = localStorage.getItem("token");
-      await axios.post(
+      const res = await axios.get(`${API}/api/signatures/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setSignatures(res.data);
+    } catch (err) {
+      console.error("Failed to fetch signatures", err);
+    }
+  };
+
+  const handleDrop = async ({
+    image,
+    x,
+    y,
+    page,
+    width = 120,
+    height = 40,
+  }) => {
+    try {
+      const token = localStorage.getItem("token");
+
+      const res = await axios.post(
         `${API}/api/signatures`,
-        { documentId: id, x, y, page },
+        { documentId: id, x, y, page, width, height, image },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+
+      setSignatures((prev) => [...prev, res.data]);
     } catch (err) {
-      console.error("Error saving signature:", err);
+      console.error("Drop error:", err);
+    }
+  };
+
+  const handleUpdate = async (sigId, newX, newY, width, height) => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.patch(
+        `${API}/api/signatures/${sigId}`,
+        { x: newX, y: newY, width, height },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setSignatures((prev) =>
+        prev.map((s) =>
+          s._id === sigId ? { ...s, x: newX, y: newY, width, height } : s
+        )
+      );
+    } catch (err) {
+      console.error("Error updating signature:", err);
     }
   };
 
@@ -111,12 +112,10 @@ const PDFViewer = () => {
       const res = await axios.post(
         `${API}/api/signatures/finalize`,
         { documentId: id },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      const fileRes = await axios.get(res.data.signedFile, {
+      const fileRes = await axios.get(`${API}${res.data.signedFile}`, {
         responseType: "blob",
       });
 
@@ -132,11 +131,12 @@ const PDFViewer = () => {
 
   useEffect(() => {
     fetchPdf();
+    fetchSignatures();
   }, [id]);
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <div className="min-h-screen p-6 bg-gray-100">
+      <div className="min-h-screen bg-gray-100 p-6">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold">PDF Viewer</h1>
           <div className="space-x-2">
@@ -155,32 +155,45 @@ const PDFViewer = () => {
           </div>
         </div>
 
-        {error && <p className="text-red-500">{error}</p>}
+        <div
+          className="relative border shadow rounded bg-white h-[85vh] overflow-auto"
+          id="pdf-container"
+        >
+          {pdfUrl && (
+            <Worker workerUrl="https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.worker.min.js">
+              <Viewer
+                fileUrl={pdfUrl}
+                plugins={[defaultLayoutPluginInstance]}
+              />
+            </Worker>
+          )}
 
-        {pdfUrl && (
-          <DropZone
-            pdfUrl={pdfUrl}
-            signatures={signatures}
-            onDrop={handleDrop}
-            appliedSign={appliedSign}
-          />
-        )}
+          {signatures.map((sig) => (
+            <DraggableResizableSignature
+              key={sig._id}
+              sig={sig}
+              onUpdate={handleUpdate}
+            />
+          ))}
+        </div>
 
         {showPopup && (
           <SignaturePopup
             onApply={(sign) => {
               setAppliedSign(sign);
+              handleDrop({
+                ...sign,
+                x: 100,
+                y: 100,
+                page: 1,
+                width: 150,
+                height: 50,
+              });
               setShowPopup(false);
             }}
             onClose={() => setShowPopup(false)}
+            onDrop={handleDrop}
           />
-        )}
-
-        {appliedSign && (
-          <div className="mt-4">
-            <p className="mb-2 font-semibold">Drag this into PDF:</p>
-            <DraggableSignature {...appliedSign} />
-          </div>
         )}
       </div>
     </DndProvider>
