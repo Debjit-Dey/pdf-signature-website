@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const { PDFDocument, rgb } = require("pdf-lib");
 
+// Font map: maps font label to file name
 const fontMap = {
   "Dancing Script": "DancingScript-Regular.ttf",
   Pacifico: "Pacifico-Regular.ttf",
@@ -22,12 +23,13 @@ exports.embedSignatureOnPDF = async (filePath, signatures) => {
     for (const sig of signatures) {
       const page = pages[sig.page - 1] || pages[0];
 
-      // 🖼️ IMAGE SIGNATURE
       if (sig.image) {
+        // 🖼️ IMAGE signature logic
+        let embeddedImg;
+
         const base64Data = sig.image.replace(/^data:image\/\w+;base64,/, "");
         const imageBuffer = Buffer.from(base64Data, "base64");
 
-        let embeddedImg;
         if (sig.image.startsWith("data:image/png")) {
           embeddedImg = await pdfDoc.embedPng(imageBuffer);
         } else if (
@@ -40,8 +42,9 @@ exports.embedSignatureOnPDF = async (filePath, signatures) => {
           continue;
         }
 
-        const drawWidth = sig.width || 120;
-        const drawHeight = sig.height || 40;
+        const pngDims = embeddedImg.scale(1);
+        const drawWidth = sig.width || pngDims.width;
+        const drawHeight = sig.height || pngDims.height;
 
         page.drawImage(embeddedImg, {
           x: sig.x,
@@ -49,12 +52,8 @@ exports.embedSignatureOnPDF = async (filePath, signatures) => {
           width: drawWidth,
           height: drawHeight,
         });
-
-        continue; // skip to next signature
-      }
-
-      // 🖋️ TEXT SIGNATURE
-      if (sig.text && sig.font) {
+      } else if (sig.text && sig.font) {
+        // 🖋️ TEXT signature logic
         const fontKey = sig.font.trim();
         const fontFile = fontMap[fontKey] || fontMap["Dancing Script"];
         const fontPath = path.join(__dirname, "../assets/fonts", fontFile);
@@ -67,17 +66,12 @@ exports.embedSignatureOnPDF = async (filePath, signatures) => {
         const fontBytes = fs.readFileSync(fontPath);
         const customFont = await pdfDoc.embedFont(new Uint8Array(fontBytes));
 
-        const drawHeight = sig.height || 40;
-        const drawWidth = sig.width || 120;
-        const fontSize = drawHeight * 0.7;
-
         page.drawText(sig.text, {
           x: sig.x,
-          y: page.getHeight() - sig.y - drawHeight * 0.2,
+          y: page.getHeight() - sig.y,
           font: customFont,
-          size: fontSize,
+          size: 18,
           color: rgb(0.2, 0.2, 0.2),
-          maxWidth: drawWidth,
         });
       }
     }

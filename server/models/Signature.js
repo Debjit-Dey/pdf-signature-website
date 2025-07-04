@@ -14,18 +14,20 @@ const signatureSchema = new mongoose.Schema(
     },
     x: { type: Number, required: true },
     y: { type: Number, required: true },
-    width: { type: Number },
-    height: { type: Number },
+    width: { type: Number, default: 150 },
+    height: { type: Number, default: 50 },
     page: { type: Number, required: true },
-    text: { type: String },
-    font: { type: String },
-    image: { type: String }, // ✅ base64 or URL of the signature image
+
+    image: { type: String }, // base64 image if used
+    text: { type: String }, // handwritten name
+    font: { type: String }, // selected font
+
     status: {
       type: String,
       enum: ["pending", "signed", "rejected"],
       default: "signed",
     },
-    reason: { type: String },
+    reason: { type: String }, // optional rejection reason
   },
   { timestamps: true }
 );

@@ -65,6 +65,24 @@ const PDFViewer = () => {
     }
   };
 
+  const handleUpdate = async (sigId, newX, newY, width, height) => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.patch(
+        `${API}/api/signatures/${sigId}`,
+        { x: newX, y: newY, width, height },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setSignatures((prev) =>
+        prev.map((s) =>
+          s._id === sigId ? { ...s, x: newX, y: newY, width, height } : s
+        )
+      );
+    } catch (err) {
+      console.error("Error updating signature:", err);
+    }
+  };
+
   const handleDrop = async ({
     image,
     x,
@@ -85,24 +103,6 @@ const PDFViewer = () => {
       setSignatures((prev) => [...prev, res.data]);
     } catch (err) {
       console.error("Drop error:", err);
-    }
-  };
-
-  const handleUpdate = async (sigId, newX, newY, width, height) => {
-    try {
-      const token = localStorage.getItem("token");
-      await axios.patch(
-        `${API}/api/signatures/${sigId}`,
-        { x: newX, y: newY, width, height },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setSignatures((prev) =>
-        prev.map((s) =>
-          s._id === sigId ? { ...s, x: newX, y: newY, width, height } : s
-        )
-      );
-    } catch (err) {
-      console.error("Error updating signature:", err);
     }
   };
 

@@ -1,31 +1,10 @@
-// server/controllers/signatureController.js
 const Signature = require("../models/Signature");
 const Document = require("../models/Document");
 const { embedSignatureOnPDF } = require("../utils/pdfLib");
-const fs = require("fs");
-const { PDFDocument } = require("pdf-lib");
 
-// @desc    Save signature position
+// @desc    Save signature (text/image) position and properties
 // @route   POST /api/signatures
-// exports.saveSignature = async (req, res) => {
-//   try {
-//     const { documentId, x, y, page } = req.body;
-
-//     const signature = await Signature.create({
-//       documentId,
-//       userId: req.user._id,
-//       x,
-//       y,
-//       page,
-//       status: "signed",
-//     });
-
-//     res.status(201).json(signature);
-//   } catch (err) {
-//     res.status(500).json({ message: "Error saving signature" });
-//   }
-// };
-// server/controllers/signatureController.js
+// @access  Protected
 exports.saveSignature = async (req, res) => {
   try {
     const {
@@ -68,8 +47,9 @@ exports.saveSignature = async (req, res) => {
   }
 };
 
-// @desc    Get signatures for a document
+// @desc    Get all signatures for a document
 // @route   GET /api/signatures/:id
+// @access  Protected
 exports.getSignatures = async (req, res) => {
   try {
     const signatures = await Signature.find({
@@ -78,16 +58,17 @@ exports.getSignatures = async (req, res) => {
 
     res.status(200).json(signatures);
   } catch (err) {
+    console.error("❌ Error fetching signatures:", err);
     res.status(500).json({ message: "Error retrieving signatures" });
   }
 };
 
-// @desc    Finalize PDF with embedded signatures
+// @desc    Finalize PDF with all embedded signatures (image/text)
 // @route   POST /api/signatures/finalize
-// @desc Finalize PDF with embedded signatures
+// @access  Protected
 exports.finalizePDF = async (req, res) => {
   try {
-    const { documentId, screenWidth, screenHeight } = req.body;
+    const { documentId } = req.body;
 
     const document = await Document.findById(documentId);
     if (!document)
@@ -95,32 +76,15 @@ exports.finalizePDF = async (req, res) => {
 
     const signatures = await Signature.find({ documentId });
 
-    const existingPdfBytes = fs.readFileSync(document.filepath);
-    const pdfDoc = await PDFDocument.load(existingPdfBytes);
-    const pages = pdfDoc.getPages();
-    const page = pages[0];
-    const pdfWidth = page.getWidth();
-    const pdfHeight = page.getHeight();
-
-    const scaleX = pdfWidth / screenWidth;
-    const scaleY = pdfHeight / screenHeight;
-
-    const scaledSignatures = signatures.map((sig) => ({
-      ...sig.toObject(),
-      x: sig.x * scaleX,
-      y: sig.y * scaleY,
-      width: sig.width * scaleX,
-      height: sig.height * scaleY,
-    }));
-
-    const outputPath = await embedSignatureOnPDF(
+    const signedFilePath = await embedSignatureOnPDF(
       document.filepath,
-      scaledSignatures
+      signatures
     );
 
-    res
-      .status(200)
-      .json({ message: "PDF finalized", signedFile: `/${outputPath}` });
+    res.status(200).json({
+      message: "PDF finalized",
+      signedFile: `/${signedFilePath}`,
+    });
   } catch (err) {
     console.error("❌ Finalize PDF error:", err);
     res.status(500).json({ message: "Error finalizing PDF" });

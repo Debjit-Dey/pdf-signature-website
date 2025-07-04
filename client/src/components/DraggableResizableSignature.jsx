@@ -18,12 +18,12 @@ const DraggableResizableSignature = ({ sig, onUpdate }) => {
       default={{ x, y, width, height }}
       bounds="#pdf-container"
       onDragStop={(e, d) => {
-        onUpdate(sig._id, d.x, d.y, width, height);
+        onUpdate(_id, d.x, d.y, width, height);
       }}
       onResizeStop={(e, direction, ref, delta, position) => {
         const newWidth = ref.offsetWidth;
         const newHeight = ref.offsetHeight;
-        onUpdate(sig._id, position.x, position.y, newWidth, newHeight);
+        onUpdate(_id, position.x, position.y, newWidth, newHeight);
       }}
       style={{
         position: "absolute",
@@ -56,10 +56,6 @@ const DraggableResizableSignature = ({ sig, onUpdate }) => {
             fontSize: "18px",
             fontFamily: font,
             color: "#111",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center", // ✅ horizontal center
-            textAlign: "center",
           }}
         >
           {text || "Signature"}
